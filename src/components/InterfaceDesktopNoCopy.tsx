@@ -117,41 +117,37 @@ export default function InterfaceDesktopNoCopy() {
     async function sendMessage() {
         if (!input.trim()) return;
 
-        // 1) 사용자 메시지를 먼저 로그에 추가
         const userText = input.trim();
-        setMessages(prev => [...prev, { who: "user", text: userText }]);
-        setInput("");
+        setMessages(prev => [...prev, { who: 'user', text: userText }]);
+        setInput('');
 
-        // 2) UI 상태를 system 메시지로 요약 (모드/역할/파이프라인/과업)
-        const systemText =
-            mode === "LLM"
+        const context =
+            mode === 'LLM'
                 ? `mode=LLM | intent=${intent} | role=${selectedRole}`
                 : `mode=Agent | intent=${intent} | pipeline=Draft>Refine>Eval>Score`;
 
         try {
-            // 3) Vercel 서버리스 함수 호출
-            const resp = await fetch("/api/chat", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    model: "gpt-4o-mini",
-                    temperature: 0.7,
-                    messages: [
-                        { role: "system", content: systemText },
-                        { role: "user", content: userText },
-                    ],
-                }),
+            const resp = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                // ★ 서버가 input만 받아도 동작하게 설계
+                body: JSON.stringify({ input: userText, context, /* model, temperature 필요시 */ }),
             });
 
-            // 4) 응답 반영
-            const data = await resp.json();
-            const answer = data?.content ?? "(no content)";
-            setMessages(prev => [...prev, { who: "assistant", text: answer }]);
+            // ★ 견고한 파싱
+            let data: any = null;
+            const raw = await resp.text();
+            try { data = JSON.parse(raw); } catch { /* not json */ }
+
+            if (!resp.ok) {
+                const msg = data?.error || raw || resp.statusText;
+                throw new Error(msg);
+            }
+
+            const answer = data?.content ?? '(no content)';
+            setMessages(prev => [...prev, { who: 'assistant', text: answer }]);
         } catch (e: any) {
-            setMessages(prev => [
-                ...prev,
-                { who: "assistant", text: `에러: ${String(e?.message || e)}` },
-            ]);
+            setMessages(prev => [...prev, { who: 'assistant', text: `서버 오류: ${String(e?.message || e)}` }]);
         }
     }
 
