@@ -114,18 +114,47 @@ export default function InterfaceDesktopNoCopy() {
       ? `[모드] LLM  |  [의도] ${intent}\n[역할] ${roleMap[selectedRole].name}\n[역할 지시]\n- ${roleMap[selectedRole].snippet}`
       : `[모드] Agent  |  [의도] ${intent}\n[파이프라인] ${pipelineLabel}\n프롬프트에 과업과 제약을 명확히 적어주세요. (역할 선택은 비활성화됨)`;
 
-  function sendMessage() {
-    if (!input.trim()) return;
-    const userMsg = { who: "user" as const, text: input.trim() };
-    const replyPrefix = mode === "Agent" ? "(Agent)" : "(LLM)";
-    const roleName = mode === "LLM" ? roleMap[selectedRole].name : pipelineLabel;
-    const assistantMsg = {
-      who: "assistant" as const,
-      text: `${replyPrefix} 의도='${intent}', 역할/파이프라인=[${roleName}] 반영해 응답합니다.\n\n• 요약 출력\n• 다음 단계 제안(예: 독자·어조 확인 → 정제 → 자체 평가/개선)`,
-    };
-    setMessages((prev) => [...prev, userMsg, assistantMsg]);
-    setInput("");
-  }
+    async function sendMessage() {
+        if (!input.trim()) return;
+
+        // 1) 사용자 메시지를 먼저 로그에 추가
+        const userText = input.trim();
+        setMessages(prev => [...prev, { who: "user", text: userText }]);
+        setInput("");
+
+        // 2) UI 상태를 system 메시지로 요약 (모드/역할/파이프라인/과업)
+        const systemText =
+            mode === "LLM"
+                ? `mode=LLM | intent=${intent} | role=${selectedRole}`
+                : `mode=Agent | intent=${intent} | pipeline=Draft>Refine>Eval>Score`;
+
+        try {
+            // 3) Vercel 서버리스 함수 호출
+            const resp = await fetch("/api/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    model: "gpt-4o-mini",
+                    temperature: 0.7,
+                    messages: [
+                        { role: "system", content: systemText },
+                        { role: "user", content: userText },
+                    ],
+                }),
+            });
+
+            // 4) 응답 반영
+            const data = await resp.json();
+            const answer = data?.content ?? "(no content)";
+            setMessages(prev => [...prev, { who: "assistant", text: answer }]);
+        } catch (e: any) {
+            setMessages(prev => [
+                ...prev,
+                { who: "assistant", text: `에러: ${String(e?.message || e)}` },
+            ]);
+        }
+    }
+
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-gray-50 to-white text-gray-900">
