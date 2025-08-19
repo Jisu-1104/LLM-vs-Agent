@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "ROLLUP_DISABLE_NATIVE=1 vite build",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -22,5 +22,9 @@
     "tailwindcss": "^3.4.10",
     "typescript": "^5.5.4",
     "vite": "^5.4.2"
-  }
+  },
+  "overrides": {
+    "rollup": "4.24.0"
+  },
+  "engines": { "node": "20.x" }
 }
